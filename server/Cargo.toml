@@ -1,0 +1,20 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.58"
+axum = { version = "0.5.11", features = ["ws"] }
+color-eyre = "0.6.1"
+generator = { path = "../generator" }
+rand = "0.8.5"
+serde = "1.0.138"
+serde_derive = "1.0.138"
+serde_json = "1.0.82"
+tokio = { version = "1.19.2", features = ["full"] }
+tower-http = { version = "0.3.4", features = ["tracing", "trace"] }
+tracing = "0.1.35"
+tracing-subscriber = { version = "0.3.14", features = ["env-filter"] }
