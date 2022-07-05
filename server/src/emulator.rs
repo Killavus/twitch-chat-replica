@@ -65,26 +65,13 @@ pub async fn send_message(twitch_tx: mpsc::Sender<TwitchEmulatorCommand>, messag
 pub async fn task(mut cmd_rx: mpsc::Receiver<TwitchEmulatorCommand>) -> Result<()> {
     let (tx, _) = broadcast::channel::<TwitchMessage>(100);
     let (gen_tx, mut gen_rx) = mpsc::channel::<TwitchMessage>(100);
-    let (msg_tx, mut msg_rx) = mpsc::channel::<String>(100);
     let num_subscribers = Arc::new(AtomicUsize::new(0));
 
     let counter = num_subscribers.clone();
+    let out_tx = gen_tx.clone();
     let generator_task = tokio::spawn(async move {
         loop {
             if counter.load(atomic::Ordering::Relaxed) > 0 {
-                while let Ok(msg) = msg_rx.try_recv() {
-                    if gen_tx
-                        .send(TwitchMessage::Owned {
-                            author: "szczenaTheMonke",
-                            message: msg,
-                        })
-                        .await
-                        .is_err()
-                    {
-                        tracing::warn!("Failed to send user message back to listening sockets");
-                    }
-                }
-
                 let messages;
                 let delay_after;
                 {
@@ -97,7 +84,7 @@ pub async fn task(mut cmd_rx: mpsc::Receiver<TwitchEmulatorCommand>) -> Result<(
 
                 for _ in 0..messages {
                     let message = generator::generate_message();
-                    if gen_tx.send(message).await.is_err() {
+                    if out_tx.send(message).await.is_err() {
                         tracing::error!(
                             "Possible bug - trying to send when there is no subscribers at all."
                         );
@@ -126,7 +113,7 @@ pub async fn task(mut cmd_rx: mpsc::Receiver<TwitchEmulatorCommand>) -> Result<(
                                 };
                             }
                             TwitchEmulatorCommand::UserMessage(msg) => {
-                                if msg_tx.send(msg).await.is_err() {
+                                if gen_tx.send(TwitchMessage::Owned { message: msg, author: "szczenaTheMonke" }).await.is_err() {
                                     tracing::warn!("Failed to send user message from WebSocket to emulator.");
                                 };
                             }
