@@ -11,7 +11,7 @@ use tokio::task::yield_now;
 use tokio::time::sleep;
 
 #[derive(Debug)]
-pub enum TwitchThreadCommand {
+pub enum TwitchEmulatorCommand {
     NewSubscriber(oneshot::Sender<TwitchHandle>),
     UserMessage(String),
 }
@@ -42,18 +42,18 @@ impl Drop for TwitchHandle {
 }
 
 #[tracing::instrument(skip(twitch_tx))]
-pub async fn get_handle(twitch_tx: mpsc::Sender<TwitchThreadCommand>) -> Result<TwitchHandle> {
+pub async fn get_handle(twitch_tx: mpsc::Sender<TwitchEmulatorCommand>) -> Result<TwitchHandle> {
     let (tx, rx) = oneshot::channel::<TwitchHandle>();
     twitch_tx
-        .send(TwitchThreadCommand::NewSubscriber(tx))
+        .send(TwitchEmulatorCommand::NewSubscriber(tx))
         .await?;
     rx.await.map_err(Error::msg)
 }
 
 #[tracing::instrument(skip(twitch_tx))]
-pub async fn send_message(twitch_tx: mpsc::Sender<TwitchThreadCommand>, message: String) {
+pub async fn send_message(twitch_tx: mpsc::Sender<TwitchEmulatorCommand>, message: String) {
     if (twitch_tx
-        .send(TwitchThreadCommand::UserMessage(message))
+        .send(TwitchEmulatorCommand::UserMessage(message))
         .await)
         .is_err()
     {
@@ -62,7 +62,7 @@ pub async fn send_message(twitch_tx: mpsc::Sender<TwitchThreadCommand>, message:
 }
 
 #[tracing::instrument(skip(cmd_rx))]
-pub async fn task(mut cmd_rx: mpsc::Receiver<TwitchThreadCommand>) -> Result<()> {
+pub async fn task(mut cmd_rx: mpsc::Receiver<TwitchEmulatorCommand>) -> Result<()> {
     let (tx, _) = broadcast::channel::<TwitchMessage>(100);
     let (gen_tx, mut gen_rx) = mpsc::channel::<TwitchMessage>(100);
     let (msg_tx, mut msg_rx) = mpsc::channel::<String>(100);
@@ -119,13 +119,13 @@ pub async fn task(mut cmd_rx: mpsc::Receiver<TwitchThreadCommand>) -> Result<()>
                     None => { break; }
                     Some(command) => {
                         match command {
-                            TwitchThreadCommand::NewSubscriber(chan) => {
+                            TwitchEmulatorCommand::NewSubscriber(chan) => {
                                 num_subscribers.fetch_add(1, atomic::Ordering::AcqRel);
                                 if chan.send(TwitchHandle::new(tx.clone().subscribe(), num_subscribers.clone())).is_err() {
                                     tracing::warn!("Failed to send twitch handle to subscriber.");
                                 };
                             }
-                            TwitchThreadCommand::UserMessage(msg) => {
+                            TwitchEmulatorCommand::UserMessage(msg) => {
                                 if msg_tx.send(msg).await.is_err() {
                                     tracing::warn!("Failed to send user message from WebSocket to emulator.");
                                 };
