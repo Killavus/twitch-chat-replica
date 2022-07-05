@@ -1,4 +1,5 @@
 use anyhow::{Error, Result};
+use std::env;
 use tokio::sync::mpsc;
 use tracing_subscriber::EnvFilter;
 
@@ -18,9 +19,12 @@ async fn main() -> Result<()> {
     tracing::info!("Starting the app");
     let app = api::router(tx).await;
 
+    let listen_addr = env::var("LISTEN_ADDR").unwrap_or_else(|_| "0.0.0.0:8080".into());
+
     let (handle_err, server_err) = tokio::join!(
         handle,
-        axum::Server::bind(&"0.0.0.0:8080".parse().unwrap()).serve(app.into_make_service()),
+        axum::Server::bind(&listen_addr.parse().expect("valid listen address"))
+            .serve(app.into_make_service()),
     );
 
     handle_err??;
