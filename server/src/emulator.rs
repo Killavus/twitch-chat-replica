@@ -7,7 +7,6 @@ use std::sync::{
 };
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tokio::task::yield_now;
 use tokio::time::sleep;
 
 #[derive(Debug)]
@@ -71,15 +70,13 @@ pub async fn task(mut cmd_rx: mpsc::Receiver<TwitchEmulatorCommand>) -> Result<(
     let out_tx = gen_tx.clone();
     let generator_task = tokio::spawn(async move {
         loop {
+            let messages;
+            let delay_after;
+
             if counter.load(atomic::Ordering::Relaxed) > 0 {
-                let messages;
-                let delay_after;
                 {
                     let mut rng = thread_rng();
                     messages = (1..=5).choose(&mut rng).expect("non-empty messages range");
-                    delay_after = (100..=1500)
-                        .choose(&mut rng)
-                        .expect("non-empty delay range");
                 }
 
                 for _ in 0..messages {
@@ -91,11 +88,16 @@ pub async fn task(mut cmd_rx: mpsc::Receiver<TwitchEmulatorCommand>) -> Result<(
                         break;
                     };
                 }
-
-                sleep(Duration::from_millis(delay_after)).await;
-            } else {
-                yield_now().await
             }
+
+            {
+                let mut rng = thread_rng();
+                delay_after = (100..=1500)
+                    .choose(&mut rng)
+                    .expect("non-empty delay range");
+            }
+
+            sleep(Duration::from_millis(delay_after)).await;
         }
     });
 
